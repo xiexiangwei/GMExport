@@ -1,0 +1,588 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace GMExport
+{
+    public partial class RegistrationOfDayRegister : Form
+    {
+        string dayPath;
+        public RegistrationOfDayRegister()
+        {
+            InitializeComponent();
+            dayPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), DateTime.Now.ToString("yyyyMMddhhmmss"));
+        }
+
+        //每日注册用户每天登录数量
+        private void exportBtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                exportBtn.Enabled = false;
+
+                var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), DateTime.Now.ToString("yyyyMMddhhmmss"));
+                if (Directory.Exists(path) == false)
+                {
+                    Directory.CreateDirectory(path);
+                }
+                for (DateTime dt = Convert.ToDateTime(beginDTP.Text); dt <= Convert.ToDateTime(endDTP.Text); dt = dt.AddDays(1))
+                {
+                    string date = dt.ToString("yyyy-MM-dd");
+                    string sql = "select DATE_FORMAT(a.login_time,'%Y-%m-%d') as date1,ta.channel,count(DISTINCT ta.uid) cut from Log.tb_login_log a LEFT JOIN Login.tb_account ta on a.account=ta.account where a.account in (select b.account from Login.tb_account b where DATE_FORMAT(b.registertime,'%Y-%m-%d') = '" + date + "') GROUP BY date1,ta.channel HAVING date1 >= '" + date + "';";
+                    DataSet ds = mysqlhelper.GetInstance().MysqlQuery(sql);
+
+                    string name = Convert.ToDateTime(date).ToString("yyyy-MM-dd");
+                    common.doExport(Path.Combine(path, string.Format("{0}.xls", name + "每日登录数")), ds.Tables[0], new string[] { "日期","渠道", "登录用户数" });
+                }
+                MessageBox.Show(string.Format("导出excel成功(路径:{0})", path), "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                exportBtn.Enabled = true;
+            }
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        //Android注册充值数量
+        private void Android_btn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                Android_btn.Enabled = false;
+
+                var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), DateTime.Now.ToString("yyyyMMddhhmmss"));
+                if (Directory.Exists(path) == false)
+                {
+                    Directory.CreateDirectory(path);
+                }
+                for (DateTime dt = Convert.ToDateTime(beginDTP.Text); dt <= Convert.ToDateTime(endDTP.Text); dt = dt.AddDays(1))
+                {
+                    string date = dt.ToString("yyyy-MM-dd");
+                    string sql = "select DATE_FORMAT(a.insert_time, '%Y-%m-%d') AS date1,a.channel,count(a.uid),sum(a.total_fee) from Game.tb_order a where a.uid in (SELECT b.uid FROM Login.tb_account b WHERE DATE_FORMAT(b.registertime, '%Y-%m-%d') = '"+ date +"') and a.state = 1 GROUP BY a.channel,date1 HAVING date1 >= '"+ date +"' ORDER BY DATE_FORMAT(a.insert_time, '%Y-%m-%d');";
+                    DataSet ds = mysqlhelper.GetInstance().MysqlQuery(sql);
+
+                    string name = Convert.ToDateTime(date).ToString("yyyy-MM-dd");
+                    common.doExport(Path.Combine(path, string.Format("{0}.xls", name + "android注册充值数")), ds.Tables[0], new string[] { "日期", "渠道", "充值用户数","充值总数量" });
+                }
+                MessageBox.Show(string.Format("导出excel成功(路径:{0})", path), "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                Android_btn.Enabled = true;
+            }
+        }
+
+        //IOS注册充值数量
+        private void IOS_btn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                IOS_btn.Enabled = false;
+
+                var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), DateTime.Now.ToString("yyyyMMddhhmmss"));
+                if (Directory.Exists(path) == false)
+                {
+                    Directory.CreateDirectory(path);
+                }
+                for (DateTime dt = Convert.ToDateTime(beginDTP.Text); dt <= Convert.ToDateTime(endDTP.Text); dt = dt.AddDays(1))
+                {
+                    string date = dt.ToString("yyyy-MM-dd");
+                    string sql = "select DATE_FORMAT(a.original_purchase_date_pst, '%Y-%m-%d') AS date1,a.uid,a.product_id from Game.tb_order_ios a where a.uid in (SELECT b.uid FROM Login.tb_account b WHERE DATE_FORMAT(b.registertime, '%Y-%m-%d') = '" + date + "') HAVING date1 >= '" + date + "' ORDER BY DATE_FORMAT(a.original_purchase_date_pst, '%Y-%m-%d');";
+                    DataSet ds = mysqlhelper.GetInstance().MysqlQuery(sql);
+
+                    string name = Convert.ToDateTime(date).ToString("yyyy-MM-dd");
+                    common.doExport(Path.Combine(path, string.Format("{0}.xls", name + "IOS注册充值数")), ds.Tables[0], new string[] { "日期", "uid", "商品ID" });
+                }
+                MessageBox.Show(string.Format("导出excel成功(路径:{0})", path), "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                IOS_btn.Enabled = true;
+            }
+        }
+
+        //根据开始时间和结束时间导出数据
+        void ExportData(string sql, string fileName, string[] tile, Button btn)
+        {
+            try
+            {
+                btn.Enabled = false;
+                if (Directory.Exists(dayPath) == false)
+                {
+                    Directory.CreateDirectory(dayPath);
+                }
+                string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+                string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+                DataSet ds = mysqlhelper.GetInstance().MysqlQuery(String.Format(sql, beginTime, endTime));
+                common.doExport(Path.Combine(dayPath, string.Format("{0}.xls", fileName)), ds.Tables[0], tile);
+                MessageBox.Show(string.Format("导出excel成功(路径:{0}/{1})", dayPath,fileName), "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                btn.Enabled = true;
+            }
+        }
+
+        //各渠道注册数量
+        private void Partner_register_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DATE_FORMAT(registertime,'%Y-%m-%d'),
+                            CASE
+                            WHEN partner = 0 THEN '游客' 
+                            WHEN partner = 1 THEN '账号密码'
+                            WHEN partner = 2 THEN '微信'
+                            WHEN partner = 3 THEN '手机'
+                            WHEN partner = 4 THEN '百度'
+                            WHEN partner = 5 THEN '应用宝'
+                            WHEN partner = 6 THEN '万能钥匙'
+                            WHEN partner = 7 THEN '万能钥匙连读方式'
+                            WHEN partner = 8 THEN '全国棋牌大厅'
+                            WHEN partner = 9 THEN '万能钥匙免登陆'
+                            WHEN partner = 20 THEN 'OPPO登陆游客'
+                            WHEN partner = 21 THEN 'OPPO登陆账号密码'
+                            WHEN partner = 22 THEN 'OPPO登陆微信'
+                            WHEN partner = 23 THEN 'OPPO登陆手机'
+                            WHEN partner = 24 THEN '华为登陆'
+                            WHEN partner = 25 THEN 'vivo登陆'
+                            END,
+                            channel,
+                            count(1)
+                            from Login.tb_account
+                            where registertime >= '{0}' and registertime < '{1}' GROUP BY DATE_FORMAT(registertime,'%Y-%m-%d'),partner,channel;";
+            ExportData(sql, "各渠道注册数量", new string[] { "日期", "注册方式", "渠道", "数量" }, Partner_register_btn);
+        }
+        //各渠道活跃数量
+        private void Partner_active_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DATE_FORMAT(tll.login_time,'%Y-%m-%d'),
+                            CASE 
+                            WHEN tll.partner = 0 THEN '游客' 
+                            WHEN tll.partner = 1 THEN '账号密码'
+                            WHEN tll.partner = 2 THEN '微信'
+                            WHEN tll.partner = 3 THEN '手机'
+                            WHEN tll.partner = 4 THEN '百度'
+                            WHEN tll.partner = 5 THEN '应用宝'
+                            WHEN tll.partner = 6 THEN '万能钥匙'
+                            WHEN tll.partner = 7 THEN '万能钥匙连读方式'
+                            WHEN tll.partner = 8 THEN '全国棋牌大厅'
+                            WHEN tll.partner = 9 THEN '万能钥匙免登陆'
+                            WHEN tll.partner = 20 THEN 'OPPO登陆游客'
+                            WHEN tll.partner = 21 THEN 'OPPO登陆账号密码'
+                            WHEN tll.partner = 22 THEN 'OPPO登陆微信'
+                            WHEN tll.partner = 23 THEN 'OPPO登陆手机'
+                            WHEN tll.partner = 24 THEN '华为登陆'
+                            WHEN tll.partner = 25 THEN 'vivo登陆'
+                            END,
+                            ta.channel,
+                            count(DISTINCT tll.account)  
+                            from `Log`.tb_login_log tll 
+                            LEFT JOIN `Login`.tb_account ta on ta.account = tll.account
+                            where tll.login_time >= '{0}' and  tll.login_time < '{1}' GROUP BY DATE_FORMAT(tll.login_time,'%Y-%m-%d'),tll.partner,ta.channel;";
+
+
+            ExportData(sql, "各渠道活跃数量", new string[] { "日期", "登录方式", "渠道", "数量" }, Partner_active_btn);
+        }
+
+        //Android充值详情
+        private void Android_order_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DISTINCT tbo.uid,tbo.channel,tbo.good_id,tbo.count,tbo.total_fee,
+                            CASE 
+                            WHEN pay_type = 0 THEN '微信' 
+                            WHEN pay_type = 1 THEN '支付宝'
+                            WHEN pay_type = 2 THEN '百度支付'
+                            WHEN pay_type = 3 THEN '米大师'
+                            WHEN pay_type = 4 THEN 'wifi'
+                            WHEN pay_type = 5 THEN 'oppo'
+                            WHEN pay_type = 6 THEN '华为'
+                            WHEN pay_type = 7 THEN 'vivo'
+                            END,
+                            tbo.insert_time 
+                            from Game.tb_order tbo
+                            LEFT JOIN Login.tb_account ta on tbo.uid = ta.uid
+                            where tbo.insert_time>='{0}' AND tbo.insert_time<'{1}' and tbo.state = 1 ORDER BY insert_time,uid;";
+            ExportData(sql, "Android充值详情", new string[] { "uid", "渠道", "商品id", "数量", "金额(分)", "支付方式", "时间" }, Android_order_btn);
+        }
+
+        //IOS充值详情
+        private void IOS_order_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"SELECT
+	                            toi.uid,
+	                            toi.original_purchase_date_pst,
+	                            toi.product_id
+                            FROM
+	                            Game.tb_order_ios toi
+                            WHERE
+	                            toi.original_purchase_date_pst >= '{0}'
+                            AND toi.original_purchase_date_pst < '{1}';";
+            ExportData(sql, "IOS充值详情", new string[] { "uid", "购买时间", "商品id" }, IOS_order_btn);
+        }
+        
+        //提现记录
+        private void Withdraw_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"SELECT
+	                            a.uid,
+	                            b.`name`,
+	                            ABS(a.add_red_pack),
+	                            a.time
+                            FROM
+	                            `Log`.tb_red_pack_log a
+                            LEFT JOIN Game.tb_user b ON a.uid = b.uid
+                            WHERE
+	                            time >= '{0}'
+                            AND time < '{1}'
+                            AND way = 14
+                            GROUP BY
+	                            uid,
+	                            add_red_pack,
+	                            time
+                            ORDER BY
+	                            a.uid DESC";
+            ExportData(sql, "提现记录", new string[] { "uid", "用户昵称", "提现金额", "提现时间" }, Withdraw_btn);
+        }
+
+        //提现用户红包来源
+        private void Red_pack_source_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select uid,add_red_pack,des,left_red_pack,time,add_red_pack_pool,left_red_pack_pool,left_pre_red_pack_pool 
+                            from `Log`.tb_red_pack_log 
+                            where uid in (select uid from `Log`.tb_red_pack_log where time > '{0}' and time < '{1}' and way=14 GROUP BY uid )
+                            ORDER BY uid DESC,time;";
+            ExportData(sql, "提现用户红包来源", new string[] { "uid", "增加的红包数量", "描述", "当前的红包数量", "时间", "增加的红包池数量", "当前的红包池数量", "当前的预付红包池数量" }, Red_pack_source_btn);
+        }
+
+        //提现用户金币来源
+        private void Gold_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select uid,prop_num,way_des,time 
+                            from `Log`.tb_user_prop_log 
+                            where prop_id = 1000 and type=0 and
+                            uid in (select uid from `Log`.tb_red_pack_log where time > '{0}' AND time < '{1}' and way=14 GROUP BY uid )
+                            ORDER BY uid DESC,time;";
+            ExportData(sql, "提现用户金币来源", new string[] { "uid", "数量", "来源", "时间" }, Gold_btn);
+        }
+
+        //Android充值统计
+        private void Android_order_statistics_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DATE_FORMAT(insert_time,'%Y-%m-%d'),count(DISTINCT uid,if(state=1,true,null)),SUM(if(state=1,total_fee,0)),count(1),count(if(state=1,true,null)) 
+                            from Game.tb_order 
+                            where insert_time >='{0}' and insert_time < '{1}'
+                            GROUP BY DATE_FORMAT(insert_time,'%Y-%m-%d');";
+            ExportData(sql, "Android充值统计", new string[] { "日期", "付费人数", "付费总金额", "订单发起次数", "订单支付成功次数" }, Android_order_statistics_btn);
+        }
+
+        //关卡数据(用户)
+        private void Level_user_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select ta.uid,ta.channel,ta.registertime,MAX(tl.level_id),ta.lastlogintime from Login.tb_account ta 
+                            LEFT JOIN Log.tb_level_log tl on ta.uid = tl.uid
+                            where ta.registertime >= '{0}' AND ta.registertime < '{1}' and tl.result = 0
+                            GROUP BY tl.uid
+                            ORDER BY ta.registertime;";
+            ExportData(sql, "关卡数据(用户)", new string[] { "uid", "渠道", "注册日期", "最大关卡", "最后一次上线时间" }, Level_user_btn);
+        }
+
+        //关卡数据(关卡)
+        private void Level_data_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"SELECT tll.level_id,COUNT(DISTINCT tll.uid),COUNT(tll.id),COUNT(tll.id)-COUNT(DISTINCT tll.uid),
+                            COUNT(IF(tll.result = 1,TRUE,NULL)),COUNT(IF(tll.result = 0,TRUE,NULL)),
+                            SUM(IF(tll.result = 0,step,0))/COUNT(IF(tll.result = 0,TRUE,NULL))
+                            from Log.tb_level_log tll
+                            where tll.time>= '{0}' AND tll.time < '{1}' AND step < 200
+                            GROUP BY tll.level_id;";
+            ExportData(sql, "关卡数据(关卡)", new string[] { "关卡id", "进入用户数", "进入次数","2次挑战次数", "失败次数", "成功次数","平均过关使用步数" }, Level_data_btn);
+        }
+
+        //比赛统计(整体)
+        private void Match_statistics_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select tb_match.match_date,tb_match.user_count,concat(FORMAT(tb_match.user_count/tb_active.active_count * 100,2),'%'),tb_match.match_double,tb_match.match_four from 
+                            (select DATE_FORMAT(tml.insert_time,'%Y-%m-%d') match_date,
+                            COUNT(DISTINCT tml.uid) user_count,
+                            COUNT(IF(match_type = 1,TRUE,NULL)) match_double,
+                            COUNT(IF(match_type = 2,TRUE,NULL)) match_four 
+                            from Log.tb_match_log tml
+                            where tml.ai_level = 0 and tml.insert_time >= '{0}' and  tml.insert_time < '{1}'
+                            GROUP BY DATE_FORMAT(tml.insert_time,'%Y-%m-%d')) tb_match
+                            LEFT JOIN 
+                            (select DATE_FORMAT(tll.login_time,'%Y-%m-%d') active_date,
+                            count(DISTINCT tll.account)  active_count
+                            from Log.tb_login_log tll 
+                            where tll.login_time >= '{2}' and  tll.login_time < '{3}'
+                            GROUP BY DATE_FORMAT(tll.login_time,'%Y-%m-%d')) tb_active on tb_match.match_date = tb_active.active_date;";
+            string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+            string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+            string dateSql = String.Format(sql, beginTime, endTime, beginTime, endTime);
+            ExportData(dateSql, "比赛统计(整体)", new string[] { "日期", "参赛人数", "日活渗透率", "今日单挑场总次数", "今日4人场总次数" }, Match_statistics_btn);
+        }
+
+        //比赛统计(用户)
+        private void Match_statistics_user_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select tml.uid,ta.registertime,
+                            COUNT(IF(tml.match_type=1,TRUE,NULL)),
+                            COUNT(IF(tml.match_type=2,TRUE,NULL)),
+                            concat(FORMAT(COUNT(IF(tml.match_type=1 and tml.match_rank = 1,TRUE,NULL))/COUNT(IF(tml.match_type=1,TRUE,NULL)) * 100,2),'%'),
+                            concat(FORMAT(COUNT(IF(tml.match_type=2 and tml.match_rank = 1,TRUE,NULL))/COUNT(IF(tml.match_type=2,TRUE,NULL)) * 100,2),'%'),
+                            concat(FORMAT(COUNT(IF(tml.match_type=2 and (tml.match_rank = 1 OR tml.match_rank = 2),TRUE,NULL))/COUNT(IF(tml.match_type=1,TRUE,NULL)) * 100,2),'%')
+                            from Log.tb_match_log tml
+                            LEFT JOIN 
+                            (SELECT uid,MIN(registertime) registertime FROM Login.tb_account GROUP BY uid) ta on tml.uid=ta.uid 
+                            where tml.ai_level = 0 AND tml.insert_time >= '{0}' AND tml.insert_time < '{1}'
+                            GROUP BY tml.uid; ";
+
+            ExportData(sql, "比赛统计(用户)", new string[] { "uid", "注册时间", "单挑场场次", "4人场场次", "单挑场胜率", "4人场净胜率(第一名)", "4人场胜率(前两名)" }, Match_statistics_user_btn);
+        }
+
+        //比赛log
+        private void Match_log_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select tml.match_id,tml.insert_time,tml.match_type,tms.map_id,
+                            MAX(CASE WHEN (tml.match_rank = 1) THEN IF(tml.ai_level = 0,tml.uid,tml.ai_level) END) ai1,
+                            MAX(CASE WHEN (tml.match_rank = 2) THEN IF(tml.ai_level = 0,tml.uid,tml.ai_level) end) ai2,
+                            MAX(CASE WHEN (tml.match_rank = 3) THEN IF(tml.ai_level = 0,tml.uid,tml.ai_level) end) ai3,
+                            MAX(CASE WHEN (tml.match_rank = 4) THEN IF(tml.ai_level = 0,tml.uid,tml.ai_level) end) ai4
+                            from Log.tb_match_log tml
+                            LEFT JOIN  (SELECT match_id,max(map_id) map_id from Game.tb_match_score GROUP BY match_id) tms ON tms.match_id = tml.match_id
+                            where tml.insert_time >= '{0}' and  tml.insert_time < '{1}'
+                            GROUP BY tml.match_id;";
+            ExportData(sql, "比赛log", new string[] { "比赛id", "比赛时间", "比赛模式", "比赛地图", "第一名", "第二名", "第三名", "第四名" }, Match_log_btn);
+        }
+
+        //挑战统计(整体)
+        private void Challenge_statistics_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select tb_challenge.challenge_date,challenge_user,concat(FORMAT(challenge_user/tb_active.active_count * 100,2),'%'),challenge_count,challenge_effective_count,challenge_share,challenge_buy,total_gold from 
+                            (select DATE_FORMAT(time,'%Y-%m-%d') challenge_date,COUNT(DISTINCT uid) challenge_user,count(id) challenge_count,COUNT( if(collect>0,TRUE,NULL)) challenge_effective_count
+                            from Log.tb_challenge_log 
+                            where time >= '{0}' and time < '{1}'
+                            GROUP BY DATE_FORMAT(time,'%Y-%m-%d')) tb_challenge
+                            LEFT JOIN 
+                            (select DATE_FORMAT(time,'%Y-%m-%d') consume_date,count(IF(way=45,TRUE,NULL)) challenge_share,count(IF(way=15,TRUE,NULL)) challenge_buy,
+	                            SUM(
+		                            CASE
+		                            WHEN (way = 15 OR way = 41) THEN
+			                            prop_num
+		                            WHEN way = 48 THEN
+			                            CASE 
+				                            WHEN prop_id = 1002 THEN prop_num * 150
+				                            WHEN prop_id = 1003 THEN prop_num * 75
+				                            WHEN prop_id = 1004 THEN prop_num * 225
+				                            WHEN prop_id = 1005 THEN prop_num * 225
+				                            WHEN prop_id = 1005 THEN prop_num * 325
+			                            END
+		                            END
+	                            ) total_gold
+                            from `Log`.tb_user_prop_log 
+                            where time >= '{2}' and time < '{3}'
+                            GROUP BY DATE_FORMAT(time,'%Y-%m-%d')) tb_consume on tb_challenge.challenge_date = tb_consume.consume_date
+                            LEFT JOIN 
+                            (select DATE_FORMAT(tll.login_time,'%Y-%m-%d') active_date,
+                            count(DISTINCT tll.account)  active_count
+                            from Log.tb_login_log tll 
+                            where tll.login_time >= '{4}' and  tll.login_time < '{5}'
+                            GROUP BY DATE_FORMAT(tll.login_time,'%Y-%m-%d')) tb_active on tb_challenge.challenge_date = tb_active.active_date;";
+            string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+            string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+            string dateSql = String.Format(sql, beginTime, endTime, beginTime, endTime, beginTime, endTime);
+            ExportData(dateSql, "挑战统计(整体)", new string[] { "日期", "挑战人数", "日活渗透率", "挑战发起数", "有效挑战次数", "挑战排行分享次数", "挑战门票购买次数", "挑战鱼币消耗总额" }, Challenge_statistics_btn);
+        }
+        //挑战统计(排行)
+        private void Challenge_statistics_rank_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DATE_FORMAT(tcrrl.reward_time,'%Y-%m-%d') reward_time,tcrrl.uid,tc.total_gold,tcrrl.rank,tcrrl.score,tu.`name`
+                            from `Log`.tb_challenge_rank_reward_log tcrrl
+                            LEFT JOIN Game.tb_user tu on tcrrl.uid= tu.uid
+                            LEFT JOIN (
+	                            select DATE_FORMAT(time,'%Y-%m-%d') consume_date,uid,
+		                            SUM(
+			                            CASE
+			                            WHEN (way = 15 OR way = 41) THEN
+				                            prop_num
+			                            WHEN way = 48 THEN
+				                            CASE 
+					                            WHEN prop_id = 1002 THEN prop_num * 150
+					                            WHEN prop_id = 1003 THEN prop_num * 75
+					                            WHEN prop_id = 1004 THEN prop_num * 225
+					                            WHEN prop_id = 1005 THEN prop_num * 225
+					                            WHEN prop_id = 1005 THEN prop_num * 325
+				                            END
+			                            END
+		                            ) total_gold
+	                            from `Log`.tb_user_prop_log 
+	                            where time >= '{0}' and time < '{1}'
+	                            GROUP BY DATE_FORMAT(time,'%Y-%m-%d'),uid
+                            ) tc on  tcrrl.reward_time = tc.consume_date and tcrrl.uid = tc.uid
+                            WHERE 
+                             tcrrl.reward_time >= '{2}' and tcrrl.reward_time < '{3}'
+                            ORDER BY tcrrl.reward_time,tcrrl.rank;";
+            string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+            string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+            string dateSql = String.Format(sql, beginTime, endTime, beginTime, endTime);
+            ExportData(dateSql, "挑战统计(排行)", new string[] { "日期", "用户UID", "个人挑战鱼币消耗", "排行榜名次", "鲨鱼数量", "是否AI" }, Challenge_statistics_rank_btn);
+        }
+
+        //玩家行为
+        private void User_action_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DATE_FORMAT(ta.registertime,'%Y-%m-%d') AS ta_date,ta.uid,ta.registertime,COUNT(DISTINCT tll.id),count(DISTINCT tlevel.id),count(DISTINCT tml.id),count(DISTINCT tcl.id) 
+                    FROM `Login`.tb_account ta 
+                    LEFT JOIN 
+                    `Log`.tb_login_log tll on  DATE_FORMAT(tll.login_time,'%Y-%m-%d') = DATE_FORMAT(ta.registertime,'%Y-%m-%d')	AND  tll.account = ta.account
+                    LEFT JOIN 
+                    `Log`.tb_level_log tlevel on DATE_FORMAT(tlevel.time,'%Y-%m-%d') = DATE_FORMAT(ta.registertime,'%Y-%m-%d')	AND tlevel.uid = ta.uid
+                    LEFT JOIN 
+                    `Log`.tb_match_log tml on  DATE_FORMAT(tml.insert_time,'%Y-%m-%d') = DATE_FORMAT(ta.registertime,'%Y-%m-%d')	AND tml.uid = ta.uid
+                    LEFT JOIN 
+                    `Log`.tb_challenge_log tcl on DATE_FORMAT(tcl.time,'%Y-%m-%d') = DATE_FORMAT(ta.registertime,'%Y-%m-%d')	AND tcl.uid = ta.uid
+                    WHERE ta.registertime >= '{0}' AND ta.registertime< '{1}'
+                    GROUP BY DATE_FORMAT(ta.registertime,'%Y-%m-%d'),ta.uid;";
+            ExportData(sql, "玩家行为", new string[] { "日期", "用户UID", "注册时间", "当日登录次数", "当日主线关卡次数", "当日比赛次数", "当日挑战次数" }, User_action_btn);
+        }
+
+        //宝箱获取log
+        private void Box_log_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"SELECT map_id,box_type,box_red_pack,step,challenge_buy_step_times,prop_des,uid,left_red_pack,left_red_pack_pool,left_pre_red_pack_pool,time 
+                            FROM `Log`.tb_box_log WHERE time >='{0}' AND time < '{1}';";
+            ExportData(sql, "宝箱获取log", new string[] { "mapid", "宝箱type", "宝箱金额", "累计使用Step", "+10步购买次数", "道具使用", "uid", "当前红包金额", "当前红包池金额", "当前预付红包池金额", "获取时间" }, Box_log_btn);
+        }
+
+        //挑战统计(地图)
+        private void Challenge_statistics_map_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select tb_score.map_id,cut,avg_score,score1,score2,score3,score4,score5,box1,box2,box3,box4,box5 from 
+                            (select map_id,COUNT(IF(collect>0,true,null)) cut,AVG(collect) avg_score,
+                            COUNT(IF(collect < 60,TRUE,NULL)) score1, 
+                            COUNT(IF(collect>=60 and collect < 80,TRUE,NULL)) score2, 
+                            COUNT(IF(collect>=80 and collect < 100,TRUE,NULL)) score3, 
+                            COUNT(IF(collect>=100 and collect < 60,TRUE,NULL)) score4, 
+                            COUNT(IF(collect>=120,TRUE,NULL)) score5
+                            from `Log`.tb_challenge_log
+                            where time >= '{0}' and time < '{1}'
+                            GROUP BY map_id) tb_score
+                            LEFT JOIN
+                            (select map_id,COUNT(IF(box_type = 1,TRUE,NULL)) box1,
+                            COUNT(IF(box_type = 2,TRUE,NULL)) box2,
+                            COUNT(IF(box_type = 3,TRUE,NULL)) box3,
+                            COUNT(IF(box_type = 4,TRUE,NULL)) box4, 
+                            COUNT(IF(box_type = 5,TRUE,NULL)) box5  
+                            from `Log`.tb_box_log
+                            where time >= '{2}' and time < '{3}'
+                            GROUP BY map_id) tb_box on tb_score.map_id = tb_box.map_id
+                            ORDER BY tb_score.map_id";
+            string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+            string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+            string dateSql = String.Format(sql, beginTime, endTime, beginTime, endTime);
+            ExportData(dateSql, "挑战统计(地图)", new string[] { "挑战mapId", "有效挑战次数", "平均鲨鱼获取数量", "60-", "60-80", "80-100","100-120","120+","宝箱_1","宝箱_2","宝箱_3","宝箱_4","宝箱_5" }, Challenge_statistics_map_btn);
+        }
+
+        //每日广告(用户)
+        private void Day_ad_user_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select ad_date,uid,SUM(cut) from 
+                            (select DATE_FORMAT(time,'%Y-%m-%d') ad_date,uid,count(id) cut 
+                            from `Log`.tb_ad_log
+                            where time >= '{0}' and time < '{1}' 
+                            GROUP BY DATE_FORMAT(time,'%Y-%m-%d'),uid
+                            UNION ALL
+                            select DATE_FORMAT(insert_time,'%Y-%m-%d') ad_date,uid,COUNT(id) cut
+                            FROM `Log`.tb_api_ad_log 
+                            where insert_time >= '{0}' and insert_time < '{1}' 
+                            GROUP BY DATE_FORMAT(insert_time,'%Y-%m-%d'),uid) temp
+                            GROUP BY ad_date,uid
+                            ORDER BY ad_date;";
+            string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+            string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+            string dateSql = String.Format(sql, beginTime, endTime, beginTime, endTime);
+            ExportData(dateSql, "每日广告(用户)", new string[] { "日期", "玩家uid", "观看广告次数" }, Day_ad_user_btn);
+      
+        }
+
+        //每日广告(整体)
+        private void Day_ad_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"SELECT DATE_FORMAT(insert_time,'%Y-%m-%d'),COUNT(id),count(DISTINCT uid),
+                            COUNT(if(ad_type=0,true,null)) oneway,
+                            COUNT(if(ad_type=1,true,null)) lanmei,
+                            COUNT(if(ad_type=2,true,null)) adhub,
+                            COUNT(if(ad_type=99,true,null)) guangfang,
+                            COUNT(if(ad_type=10,true,null)) oppo,
+                            COUNT(if(ad_type=11,true,null)) baidu,
+                            COUNT(if(ad_type=12,true,null)) vivo, 
+                            COUNT(if(ad_type=13,true,null)) gdt,
+                            COUNT(if(ad_position=1,true,null)) zhanqian,
+                            COUNT(if(ad_position=0,true,null)) jiawubu 
+                            from Log.tb_api_ad_log
+                            where insert_time >= '{0}' and insert_time < '{1}'
+                            GROUP BY DATE_FORMAT(insert_time,'%Y-%m-%d');";
+            ExportData(sql, "每日广告(整体)", new string[] { "日期", "请求次数", "请求人数", "oneway", "蓝莓", "adhub", "官方", "oppo", "百度", "vivo", "广点通", "站前广告", "加五步" }, Day_ad_user_btn);
+        }
+
+        //玩家留存
+        private void User_retained_btn_Click(object sender, EventArgs e)
+        {
+            string sql = @"select DATE_FORMAT(ta.registertime,'%Y-%m-%d') userDate,count(DISTINCT ta.uid) newUser,tb_retained.activeCut,tb_invite.inviteCut,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 1 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) secondRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 2 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) thirdRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 3 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) fourthRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 4 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) fifthRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 5 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) sixthRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 6 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) sevenRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 14 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) fifteenthRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 29 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) thirtyRetained,
+                            count(DISTINCT ta.uid,if(DATE_FORMAT(DATE_SUB(tll.login_time,INTERVAL 59 DAY),'%Y-%m-%d')=DATE_FORMAT(ta.registertime,'%Y-%m-%d'),true,null)) sixtyRetained
+                            from Login.tb_account ta
+                            left join `Log`.tb_login_log tll on ta.account = tll.account
+                            LEFT JOIN (select DATE_FORMAT(login_time,'%Y-%m-%d') activeDate,count(DISTINCT account) activeCut
+                            from Log.tb_login_log 
+                            where login_time >= '{0}' and login_time < '{1}' 
+                            GROUP BY DATE_FORMAT(login_time,'%Y-%m-%d')
+                            ) tb_retained on DATE_FORMAT(ta.registertime,'%Y-%m-%d')=tb_retained.activeDate
+                            LEFT JOIN (
+                            select DATE_FORMAT(ta.registertime,'%Y-%m-%d') inviteDate,count(DISTINCT ta.account) inviteCut
+                            from Login.tb_account ta
+                            INNER JOIN Game.tb_share ts on ta.account = ts.uuid 
+                            where registertime >= '{2}' and registertime < '{3}' 
+                            group by DATE_FORMAT(ta.registertime,'%Y-%m-%d')
+                            ) tb_invite on tb_invite.inviteDate = DATE_FORMAT(ta.registertime,'%Y-%m-%d')
+                            where ta.registertime >= '{4}' and ta.registertime < '{5}' 
+                            GROUP BY userDate;";
+            string beginTime = Convert.ToDateTime(beginDTP.Text).ToString("yyyy-MM-dd");
+            string endTime = Convert.ToDateTime(endDTP.Text).ToString("yyyy-MM-dd");
+            string dateSql = String.Format(sql, beginTime, endTime, beginTime, endTime, beginTime, endTime);
+            ExportData(dateSql, "玩家留存", new string[] { "日期", "新增用户数", "活跃数","邀新人数","二日留存","三日留存","四日留存","五日留存","六日留存","七日留存","十五日留存","三十日留存","六十日留存" }, User_retained_btn);
+        } 
+    }
+}
